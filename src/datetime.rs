@@ -25,15 +25,14 @@ where
     pub fn time(&mut self) -> Result<NaiveTime, Error<E>> {
         let [seconds_100th, seconds, minutes, hours] =
             self.read_register_multiple(Register::SECONDS_100TH)?;
-        let osc_reg = self.read_oscillator_register()?;
+        let osc_reg = self.read_oscillator_register()?; // TODO should probably get rid of this..
 
-        Ok(NaiveTime::from_hms_milli_opt(
-            decode_hours(hours, osc_reg).as_24h().into(),
-            decode_minutes(minutes).into(),
-            decode_seconds(seconds).into(),
-            decode_seconds_100th(seconds_100th) as u32 * 10,
-        )
-        .unwrap())
+        let hour = decode_hours(hours, osc_reg).as_24h().into();
+        let minute = decode_minutes(minutes).into();
+        let second = decode_seconds(seconds).into();
+        let millisecond = (decode_seconds_100th(seconds_100th) as u32 * 10).min(999);
+
+        Ok(NaiveTime::from_hms_milli_opt(hour, minute, second, millisecond).unwrap())
     }
 
     pub fn set_time(&mut self, time: NaiveTime) -> Result<(), Error<E>> {
