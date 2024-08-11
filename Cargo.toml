@@ -10,4 +10,4 @@ embedded-hal = "1.0"
 rtcc = "0.3.2"
 
 [dev-dependencies]
-embedded-hal-mock = "0.9"
+embedded-hal-mock = "0.11"

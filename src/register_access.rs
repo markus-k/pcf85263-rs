@@ -278,6 +278,10 @@ impl<I2C> I2cInterface<I2C> {
     pub fn new(i2c: I2C, address: u8) -> Self {
         Self { i2c, address }
     }
+
+    pub fn release(self) -> I2C {
+        self.i2c
+    }
 }
 
 impl<I2C, E> RegisterAccess for I2cInterface<I2C>
@@ -324,7 +328,7 @@ mod tests {
     use crate::DEFAULT_ADDRESS;
 
     use super::*;
-    use embedded_hal_mock::i2c::{Mock as I2cMock, Transaction as I2cTransaction};
+    use embedded_hal_mock::eh1::i2c::{Mock as I2cMock, Transaction as I2cTransaction};
 
     #[test]
     fn test_write_register() {
@@ -332,7 +336,7 @@ mod tests {
 
         let i2c = I2cMock::new(&expectations);
 
-        let mut rtc = Pcf85263a::new(i2c);
+        let mut rtc = I2cInterface::new(i2c, DEFAULT_ADDRESS);
         rtc.write_register(0x12, 0x34).unwrap();
 
         let mut i2c = rtc.release();
@@ -350,7 +354,7 @@ mod tests {
 
         let i2c = I2cMock::new(&expectations);
 
-        let mut rtc = Pcf85263a::new(i2c);
+        let mut rtc = I2cInterface::new(i2c, DEFAULT_ADDRESS);
         let reg_val = rtc.read_register(0x12).unwrap();
         assert_eq!(reg_val, 0x34);
 
@@ -369,8 +373,9 @@ mod tests {
 
         let i2c = I2cMock::new(&expectations);
 
-        let mut rtc = Pcf85263a::new(i2c);
-        let reg_val: [u8; 3] = rtc.read_register_multiple(0x12).unwrap();
+        let mut rtc = I2cInterface::new(i2c, DEFAULT_ADDRESS);
+        let mut reg_val: [u8; 3] = [0; 3];
+        rtc.read_registers(0x12, &mut reg_val).unwrap();
         assert_eq!(reg_val[0], 0x34);
         assert_eq!(reg_val[1], 0x56);
         assert_eq!(reg_val[2], 0x78);
