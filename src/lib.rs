@@ -7,7 +7,7 @@ pub use register_access::RegisterAccess;
 pub use rtcc::{DateTimeAccess, NaiveDate, NaiveDateTime, NaiveTime, Timelike};
 
 pub use crate::register_access::{
-    ClockOutputFrequency, FunctionReg, I2cInterface, LoadCapacitance, OscillatorReg,
+    ClockOutputFrequency, CrystalDrive, FunctionReg, I2cInterface, LoadCapacitance, OscillatorReg,
 };
 
 pub const DEFAULT_ADDRESS: u8 = 0x51; // 0xA2 (W) + 0xA3 (R)

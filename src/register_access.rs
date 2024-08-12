@@ -60,6 +60,26 @@ impl LoadCapacitance {
 }
 
 #[derive(Debug)]
+pub enum CrystalDrive {
+    /// Normal drive, R_S(max) = 100 kOhm
+    Normal,
+    /// Low drive, R_S(max) = 60 kOhm; reduces I_dd
+    Low,
+    /// High drive, R_S(max) = 500 kOhm; increases I_dd
+    High,
+}
+
+impl CrystalDrive {
+    pub fn as_u8(self) -> u8 {
+        match self {
+            CrystalDrive::Normal => 0b00,
+            CrystalDrive::Low => 0b01,
+            CrystalDrive::High => 0b10, // or 0b11
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct OscillatorReg(u8);
 
 impl OscillatorReg {
@@ -81,22 +101,34 @@ impl OscillatorReg {
     }
 
     pub fn with_load_capacitance(self, lc: LoadCapacitance) -> Self {
-        Self((self.0 & !Self::CL_MASK) | lc.as_u8())
+        Self((self.0 & !(Self::CL_MASK << Self::CL)) | lc.as_u8() << Self::CL)
     }
 
     pub fn with_offset_mode(self, offm: OffsetMode) -> Self {
-        match offm {
-            OffsetMode::Normal => Self(self.0 & !(1 << Self::OFFM)),
-            OffsetMode::Fast => Self(self.0 | (1 << Self::OFFM)),
-        }
+        Self(match offm {
+            OffsetMode::Normal => self.0 & !(1 << Self::OFFM),
+            OffsetMode::Fast => self.0 | (1 << Self::OFFM),
+        })
     }
 
     pub fn with_low_jitter(self, enabled: bool) -> Self {
-        if enabled {
-            Self(self.0 | (1 << Self::LOWJ))
+        Self(if enabled {
+            self.0 | (1 << Self::LOWJ)
         } else {
-            Self(self.0 & !(1 << Self::LOWJ))
-        }
+            self.0 & !(1 << Self::LOWJ)
+        })
+    }
+
+    pub fn with_crystal_drive(self, drive: CrystalDrive) -> Self {
+        Self((self.0 & !(Self::OSCD_MASK << Self::OSCD)) | (drive.as_u8() << Self::OSCD))
+    }
+
+    pub fn with_inverted_clockout(self, invert: bool) -> Self {
+        Self(if invert {
+            self.0 | (1 << Self::CLKIV)
+        } else {
+            self.0 & !(1 << Self::CLKIV)
+        })
     }
 
     pub fn as_u8(&self) -> u8 {
@@ -329,6 +361,26 @@ mod tests {
 
     use super::*;
     use embedded_hal_mock::eh1::i2c::{Mock as I2cMock, Transaction as I2cTransaction};
+
+    #[test]
+    fn test_osc_reg() {
+        let mut reg = OscillatorReg::default();
+
+        reg = reg.with_inverted_clockout(true);
+        assert_eq!(reg.as_u8(), 0x80);
+
+        reg = reg.with_load_capacitance(LoadCapacitance::Cl6pF);
+        assert_eq!(reg.as_u8(), 0x81);
+
+        reg = reg.with_offset_mode(OffsetMode::Fast);
+        assert_eq!(reg.as_u8(), 0xC1);
+
+        reg = reg.with_low_jitter(true);
+        assert_eq!(reg.as_u8(), 0xD1);
+
+        reg = reg.with_crystal_drive(CrystalDrive::Low);
+        assert_eq!(reg.as_u8(), 0xD5);
+    }
 
     #[test]
     fn test_write_register() {
