@@ -185,11 +185,34 @@ impl ClockOutputFrequency {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum PeriodicInterrupt {
+    NoInterrupt,
+    OncePerSecond,
+    OncePerMinute,
+    OncePerHour,
+}
+
+impl PeriodicInterrupt {
+    pub fn as_u8(&self) -> u8 {
+        match self {
+            PeriodicInterrupt::NoInterrupt => 0b00,
+            PeriodicInterrupt::OncePerSecond => 0b01,
+            PeriodicInterrupt::OncePerMinute => 0b10,
+            PeriodicInterrupt::OncePerHour => 0b11,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct FunctionReg(u8);
 
 impl FunctionReg {
     pub const S_100TH: u8 = 7;
+    pub const PI: u8 = 5;
+    pub const PI_MASK: u8 = 0b11;
+    pub const RTCM: u8 = 4;
+    pub const STOPM: u8 = 3;
     pub const COF: u8 = 0;
     pub const COF_MASK: u8 = 0b111;
 
@@ -210,7 +233,11 @@ impl FunctionReg {
     }
 
     pub fn with_clock_output_frequency(self, cof: ClockOutputFrequency) -> Self {
-        Self(self.0 & ((!Self::COF_MASK) << Self::COF) | cof.as_u8() << Self::COF)
+        Self((self.0 & !(Self::COF_MASK << Self::COF)) | (cof.as_u8() << Self::COF))
+    }
+
+    pub fn with_periodic_interrupt(self, pi: PeriodicInterrupt) -> Self {
+        Self((self.0 & !(Self::PI_MASK << Self::PI)) | (pi.as_u8() << Self::PI))
     }
 
     pub fn as_u8(&self) -> u8 {
@@ -219,6 +246,111 @@ impl FunctionReg {
 }
 
 impl Default for FunctionReg {
+    fn default() -> Self {
+        Self(0x00)
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum IntAPinMode {
+    ClkOutputMode,
+    BatteryModeIndication,
+    IntA,
+    HiZ,
+}
+
+impl IntAPinMode {
+    pub fn as_u8(&self) -> u8 {
+        match self {
+            IntAPinMode::ClkOutputMode => 0b00,
+            IntAPinMode::BatteryModeIndication => 0b01,
+            IntAPinMode::IntA => 0b10,
+            IntAPinMode::HiZ => 0b11,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct PinIoReg(u8);
+
+impl PinIoReg {
+    pub const INTAPM: u8 = 0;
+    pub const INTAPM_MASK: u8 = 0b11;
+
+    pub fn with_inta_pinmode(self, intapm: IntAPinMode) -> Self {
+        Self((self.0 & !(Self::INTAPM_MASK << Self::INTAPM)) | (intapm.as_u8() << Self::INTAPM))
+    }
+
+    pub fn as_u8(&self) -> u8 {
+        self.0
+    }
+}
+
+impl Default for PinIoReg {
+    fn default() -> Self {
+        Self(0x00)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct InterruptReg(u8);
+
+impl InterruptReg {
+    pub const ILP: u8 = 7;
+    pub const PIE: u8 = 6;
+    pub const OIE: u8 = 5;
+    pub const A1IE: u8 = 4;
+    pub const A2IE: u8 = 3;
+    pub const TSRIE: u8 = 2;
+    pub const BSIE: u8 = 1;
+    pub const WDIE: u8 = 0;
+
+    fn with_bit(self, bit: u8, set: bool) -> Self {
+        Self(if set {
+            self.0 | (1 << bit)
+        } else {
+            self.0 & !(1 << bit)
+        })
+    }
+
+    pub fn with_level(self, level: bool) -> Self {
+        self.with_bit(Self::ILP, level)
+    }
+
+    pub fn with_periodic_interrupt(self, en: bool) -> Self {
+        self.with_bit(Self::PIE, en)
+    }
+
+    pub fn with_offset_correction_interrupt(self, en: bool) -> Self {
+        self.with_bit(Self::OIE, en)
+    }
+
+    pub fn with_alarm1_interrupt(self, en: bool) -> Self {
+        self.with_bit(Self::A1IE, en)
+    }
+
+    pub fn with_alarm2_interrupt(self, en: bool) -> Self {
+        self.with_bit(Self::A2IE, en)
+    }
+
+    pub fn with_battery_switch_interrupt(self, en: bool) -> Self {
+        self.with_bit(Self::BSIE, en)
+    }
+
+    pub fn with_watchdog_interrupt(self, en: bool) -> Self {
+        self.with_bit(Self::WDIE, en)
+    }
+
+    pub fn with_timestamp_interrupt(self, en: bool) -> Self {
+        self.with_bit(Self::TSRIE, en)
+    }
+
+    pub fn as_u8(&self) -> u8 {
+        self.0
+    }
+}
+
+impl Default for InterruptReg {
     fn default() -> Self {
         Self(0x00)
     }
@@ -288,6 +420,18 @@ where
 
     pub fn write_function_register(&mut self, fr: FunctionReg) -> Result<(), Error<E>> {
         self.write_register(Register::FUNCTION, fr.as_u8())
+    }
+
+    pub fn write_pinio_register(&mut self, pinio: PinIoReg) -> Result<(), Error<E>> {
+        self.write_register(Register::PIN_IO, pinio.as_u8())
+    }
+
+    pub fn write_inta_register(&mut self, int: InterruptReg) -> Result<(), Error<E>> {
+        self.write_register(Register::INTA_ENABLE, int.as_u8())
+    }
+
+    pub fn write_intb_register(&mut self, int: InterruptReg) -> Result<(), Error<E>> {
+        self.write_register(Register::INTB_ENABLE, int.as_u8())
     }
 }
 
